@@ -3,13 +3,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
+    Router,
     extract::{Form, Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     routing::get,
-    Router,
 };
-use minijinja::{context, Environment};
+use minijinja::{Environment, context};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -70,79 +70,17 @@ impl AppState {
 fn build_templates() -> Environment<'static> {
     let mut env = Environment::new();
 
-    env.add_template(
-        "base.html",
-        r#"<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>{% block title %}Bookmarks{% endblock %}</title></head>
-<body>
-  <nav><a href="/bookmarks">All bookmarks</a> | <a href="/bookmarks/new">+ New</a></nav>
-  <hr>
-  {% block content %}{% endblock %}
-</body>
-</html>"#,
-    )
-    .unwrap();
+    env.add_template("base.html", include_str!("../templates/base.html"))
+        .unwrap();
 
-    env.add_template(
-        "list.html",
-        r#"{% extends "base.html" %}
-{% block title %}All bookmarks{% endblock %}
-{% block content %}
-  <h1>Bookmarks ({{ bookmarks | length }})</h1>
-  {% if bookmarks %}
-  <ul>
-    {% for bm in bookmarks %}
-    <li>
-      <a href="/bookmarks/{{ bm.id }}">{{ bm.title }}</a>
-      -- <code>{{ bm.url }}</code>
-      {% if bm.tags %}<em>({{ bm.tags | join(", ") }})</em>{% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p>No bookmarks yet. <a href="/bookmarks/new">Create one?</a></p>
-  {% endif %}
-{% endblock %}"#,
-    )
-    .unwrap();
+    env.add_template("list.html", include_str!("../templates/list.html"))
+        .unwrap();
 
-    env.add_template(
-        "detail.html",
-        r#"{% extends "base.html" %}
-{% block title %}{{ bookmark.title }}{% endblock %}
-{% block content %}
-  <h1>{{ bookmark.title }}</h1>
-  <dl>
-    <dt>ID</dt>    <dd>{{ bookmark.id }}</dd>
-    <dt>URL</dt>   <dd><a href="{{ bookmark.url }}">{{ bookmark.url }}</a></dd>
-    <dt>Tags</dt>  <dd>{{ bookmark.tags | join(", ") if bookmark.tags else "-" }}</dd>
-  </dl>
-{% endblock %}"#,
-    )
-    .unwrap();
+    env.add_template("detail.html", include_str!("../templates/detail.html"))
+        .unwrap();
 
-    env.add_template(
-        "new.html",
-        r#"{% extends "base.html" %}
-{% block title %}New bookmark{% endblock %}
-{% block content %}
-  <h1>New bookmark</h1>
-  <form method="post" action="/bookmarks">
-    <p>
-      <label>Title<br><input type="text" name="title" required placeholder="Title" size="60"></label>
-    </p>
-    <p>
-      <label>URL<br><input type="url" name="url" required placeholder="https://example.com" size="60"></label>
-    </p>
-    <p>
-      <label>Tags (comma-separated)<br><input type="text" name="tags" placeholder="rust, async" size="60"></label>
-    </p>
-    <p><button type="submit">Save</button></p>
-  </form>
-{% endblock %}"#,
-    )
-    .unwrap();
+    env.add_template("new.html", include_str!("../templates/new.html"))
+        .unwrap();
 
     env
 }
@@ -155,7 +93,11 @@ fn render(env: &Environment, name: &str, ctx: minijinja::Value) -> Response {
         Ok(html) => Html(html).into_response(),
         Err(e) => {
             eprintln!("template error: {e:#}");
-            (StatusCode::INTERNAL_SERVER_ERROR, Html("template error".to_string())).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html("template error".to_string()),
+            )
+                .into_response()
         }
     }
 }
@@ -183,11 +125,7 @@ async fn new_bookmark_form(State(state): State<AppState>) -> Response {
 async fn get_bookmark(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
     let store = state.read_store().await;
     match store.bookmarks.get(&id) {
-        Some(bm) => render(
-            &state.templates,
-            "detail.html",
-            context! { bookmark => bm },
-        ),
+        Some(bm) => render(&state.templates, "detail.html", context! { bookmark => bm }),
         None => (
             StatusCode::NOT_FOUND,
             render(&state.templates, "404.html", context! {}),

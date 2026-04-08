@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}All bookmarks{% endblock %}
+{% block content %}
+  <h1>Bookmarks ({{ bookmarks | length }})</h1>
+  {% if bookmarks %}
+  <ul>
+    {% for bm in bookmarks %}
+    <li>
+      <a href="/bookmarks/{{ bm.id }}">{{ bm.title }}</a>
+      -- <code>{{ bm.url }}</code>
+      {% if bm.tags %}<em>({{ bm.tags | join(", ") }})</em>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No bookmarks yet. <a href="/bookmarks/new">Create one?</a></p>
+  {% endif %}
+{% endblock %}
