@@ -249,11 +249,16 @@ mod tests {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .unwrap();
+
+	let mut bookmark = HashMap::new();
+	bookmark.insert("title", "The Rust Programming Language");
+	bookmark.insert("url", "https://doc.rust-lang.org/book");
+	bookmark.insert("tags", "rust,book");
  
         let res = client
             .post(format!("{server_addr}/bookmarks"))
             .header("content-type", "application/x-www-form-urlencoded")
-            .body("title=Rust+Book&url=https%3A%2F%2Fdoc.rust-lang.org&tags=rust%2Cbook")
+	    .form(&bookmark)
             .send()
             .await
             .unwrap();
