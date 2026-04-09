@@ -3,13 +3,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
-    Router,
     extract::{Form, Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     routing::get,
+    Router,
 };
-use minijinja::{Environment, context};
+use minijinja::{context, Environment};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -166,6 +166,16 @@ async fn create_bookmark(
     Redirect::to(&format!("/bookmarks/{id}"))
 }
 
+fn build_router(state: AppState) -> Router {
+    // Important: `/bookmarks/new` must be registered before `/bookmarks/:id`
+    // so that "new" isn't interpreted as an id parameter.
+    Router::new()
+        .route("/bookmarks", get(list_bookmarks).post(create_bookmark))
+        .route("/bookmarks/new", get(new_bookmark_form))
+        .route("/bookmarks/{id}", get(get_bookmark))
+        .with_state(state)
+}
+
 // Main
 
 #[tokio::main]
@@ -185,13 +195,7 @@ async fn main() {
         }
     });
 
-    // Important: `/bookmarks/new` must be registered before `/bookmarks/:id`
-    // so that "new" isn't interpreted as an id parameter.
-    let app = Router::new()
-        .route("/bookmarks", get(list_bookmarks).post(create_bookmark))
-        .route("/bookmarks/new", get(new_bookmark_form))
-        .route("/bookmarks/{id}", get(get_bookmark))
-        .with_state(state);
+    let app = build_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
@@ -199,4 +203,62 @@ async fn main() {
 
     println!("Open http://127.0.0.1:8080/bookmarks in your browser");
     axum::serve(listener, app).await.expect("server error");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Spawn a server in the background and return its address
+    async fn spawn_server() -> String {
+        let state = AppState {
+            store: Arc::new(RwLock::new(BookmarkStore::default())),
+            templates: Arc::new(build_templates()),
+        };
+        // Binding to port 0 lets the OS pick an available port.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        // Spawn the server in the background.
+        tokio::spawn(async move {
+            axum::serve(listener, build_router(state)).await.unwrap();
+        });
+        format!("http://{addr}")
+    }
+
+    #[tokio::test]
+    async fn index_returns_empty_bookmark_template() {
+        let server_addr = spawn_server().await;
+        let client = reqwest::Client::new();
+	let context: minijinja::Value = context! { bookmarks => Vec::<Bookmark>::new() };
+	let expected = build_templates().get_template("list.html").unwrap().render(context).unwrap();
+ 
+	// GET /
+        let res = client.get(&format!("{server_addr}/bookmarks")).send().await.unwrap();
+ 
+        assert_eq!(res.status(), 200);
+
+        let actual = res.text().await.unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn create_bookmark_redirects() {
+        let server_addr = spawn_server().await;
+        // Don't follow the redirect: we want to inspect the original redirect response
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+ 
+        let res = client
+            .post(format!("{server_addr}/bookmarks"))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body("title=Rust+Book&url=https%3A%2F%2Fdoc.rust-lang.org&tags=rust%2Cbook")
+            .send()
+            .await
+            .unwrap();
+ 
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
+        assert_eq!(res.headers().get("location").unwrap(), "/bookmarks/0");
+    }
 }
