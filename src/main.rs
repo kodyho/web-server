@@ -222,6 +222,7 @@ mod tests {
         tokio::spawn(async move {
             axum::serve(listener, build_router(state)).await.unwrap();
         });
+        // "http://127.0.0.1:55556"
         format!("http://{addr}")
     }
 
@@ -280,12 +281,12 @@ mod tests {
         let server_addr = spawn_server().await;
         let client = reqwest::Client::builder().build().unwrap();
 
-        let bookmark = 
-                Bookmark { id: 0,
-                           title: "The Rust Programming Language".to_string(),
-                           url: "https://doc.rust-lang.org/book".to_string(),
-                           tags: vec!["rust".to_string(), "book".to_string()]
-                };
+        let bookmark = Bookmark {
+            id: 0,
+            title: "The Rust Programming Language".to_string(),
+            url: "https://doc.rust-lang.org/book".to_string(),
+            tags: vec!["rust".to_string(), "book".to_string()],
+        };
 
         let mut bookmark_map = HashMap::new();
         bookmark_map.insert("title", bookmark.title.clone());
