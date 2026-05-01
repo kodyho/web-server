@@ -204,7 +204,7 @@ async fn create_bookmark_impl(
     title: String,
     tags: Vec<String>,
 ) -> sqlx::Result<i64> {
-    // TODO: transactions
+    let mut trans = pool.begin().await?;
 
     let bookmark_id = sqlx::query_scalar::<_, i64>(
         r"INSERT INTO bookmark (url, title) VALUES (?, ?) RETURNING id",
@@ -257,6 +257,27 @@ async fn create_bookmark(
     Redirect::to(&format!("/bookmarks/{id}")).into_response()
 }
 
+async fn delete_bookmark(
+    State(state): State<AppState>,
+    Path(id): Path<u64>
+) -> Response {
+    let result = async {
+        sqlx::query("DELETE FROM bookmark_tag WHERE bookmark_id = ?")
+            .bind(id as i64)
+            .execute(&state.store)
+            .await?;
+        sqlx::query("DELETE FROM bookmark WHERE id = ?")
+            .bind(id as i64)
+            .execute(&state.store)
+            .await
+    }.await;
+
+    if result.is_err() {
+        return database_error();
+    }
+    Redirect::to("/bookmarks").into_response()
+}
+
 fn build_router(state: AppState) -> Router {
     // Important: `/bookmarks/new` must be registered before `/bookmarks/:id`
     // so that "new" isn't interpreted as an id parameter.
@@ -264,6 +285,7 @@ fn build_router(state: AppState) -> Router {
         .route("/bookmarks", get(list_bookmarks).post(create_bookmark))
         .route("/bookmarks/new", get(new_bookmark_form))
         .route("/bookmarks/{id}", get(get_bookmark))
+        .route("/delete/{id}", get(delete_bookmark))
         .with_state(state)
 }
 

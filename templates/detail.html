@@ -7,4 +7,5 @@
     <dt>URL</dt>   <dd><a href="{{ bookmark.url }}">{{ bookmark.url }}</a></dd>
     <dt>Tags</dt>  <dd>{{ bookmark.tags | join(", ") if bookmark.tags else "-" }}</dd>
   </dl>
+  <a href="/delete/{{ bookmark.id }}">Delete</a>
 {% endblock %}
